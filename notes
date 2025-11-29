@@ -1,0 +1,74 @@
+set -e
+
+readonly NOTES_DIRECTORY="${NOTES_DIRECTORY:-${HOME}/notes}"
+readonly NOTES_EDITOR="${EDITOR}"
+
+# One file per year
+readonly NOTES_FILE="$(date +%Y).txt"
+readonly NOTES_PATH="${NOTES_DIRECTORY}/${NOTES_FILE}"
+
+# Ensure notes directory exists (prompt like original)
+if [ ! -d "${NOTES_DIRECTORY}" ]; then
+    while true; do
+        printf "%s does not exist, do you want to create it? (y/n) " "${NOTES_DIRECTORY}"
+        read -r yn
+
+        case "${yn}" in
+            [Yy]* ) mkdir -p "${NOTES_DIRECTORY}"; break;;
+            [Nn]* ) exit;;
+            * ) printf "Please answer y or n\n\n";;
+        esac
+    done
+fi
+
+# Helper: prepend piped content with a date tag
+prepend_stdin_with_date() {
+    tmp="$(mktemp "${NOTES_DIRECTORY}/.notes.prepend.XXXXXX")"
+    current_date="$(date +%F)" # YYYY-MM-DD
+
+    {
+        # Date tag line, then the piped content
+        printf "#%s\n" "${current_date}"
+        cat
+
+        # Spacing to match original behavior
+        printf "\n\n"
+
+        # Append old content (if any)
+        if [ -f "${NOTES_PATH}" ]; then
+            cat "${NOTES_PATH}"
+        fi
+    } > "${tmp}"
+
+    mv "${tmp}" "${NOTES_PATH}"
+}
+
+# Helper: prepend a single-line entry (arguments) with a date tag
+prepend_args_with_date() {
+    tmp="$(mktemp "${NOTES_DIRECTORY}/.notes.prepend.XXXXXX")"
+    current_date="$(date +%F)" # YYYY-MM-DD
+
+    {
+        # Date tag on the same line as the entry text
+        printf "#%s %s\n\n" "${current_date}" "$*"
+
+        # Append old content (if any)
+        if [ -f "${NOTES_PATH}" ]; then
+            cat "${NOTES_PATH}"
+        fi
+    } > "${tmp}"
+
+    mv "${tmp}" "${NOTES_PATH}"
+}
+
+if [ ${#} -eq 0 ]; then
+    # No arguments: either stdin is piped or open editor
+    if [ -p "/dev/stdin" ]; then
+        prepend_stdin_with_date
+    else
+        eval "${NOTES_EDITOR}" "${NOTES_PATH}"
+    fi
+else
+    # Arguments provided: prepend "#YYYY-MM-DD your text"
+    prepend_args_with_date "$@"
+fi
